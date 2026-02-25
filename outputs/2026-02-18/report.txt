@@ -1,0 +1,36 @@
+
+GRIDLEDGER REVENUE SNAPSHOT
+Timestamp: 2026-02-18T10:57:11.789600
+
+Average Price: 12.1
+Min Price: -15.89
+Max Price: 44.43
+Price Range: 60.33
+Volatility: 16.58
+Risk Level: Medium
+
+Revenue Estimate:
+Simple Revenue: 24.2
+Arbitrage Proxy: 108.59
+
+AI Memo:
+# Battery Storage Investment Underwriting Memo
+
+**Asset:** 2 MWh Battery Energy Storage System
+**Period:** February 11–18, 2026 | **Risk Rating:** Medium
+
+## Summary
+
+The subject market exhibits meaningful price dispersion over the evaluation window, with a $60.33 spread between floor ($-15.89/MWh) and ceiling ($44.43/MWh) pricing. Negative pricing events present dual opportunity: revenue capture through charging during surplus periods and arbitrage extraction during peak demand. Volatility of 16.58 against an average price of $12.1/MWh signals favorable conditions for spread-based strategies.
+
+## Revenue Assessment
+
+At one cycle per day with 90% round-trip efficiency, simple revenue estimates of $24.20 appear conservative. The arbitrage proxy model yields $108.59 for the period, suggesting the asset can effectively capture intraday spreads well above average pricing. Annualized, this trajectory supports competitive returns for a modestly sized installation.
+
+## Risk Considerations
+
+Medium risk designation reflects exposure to compressed spreads during mild weather periods and regulatory uncertainty around negative pricing settlement rules. The relatively low average price limits revenue floors if volatility contracts. Additionally, 2,520 observations across seven days provide reasonable but not exhaustive statistical confidence.
+
+## Recommendation
+
+The risk-reward profile is attractive for investors with tolerance for energy market cyclicality. Proceeding to detailed financial modeling is warranted.

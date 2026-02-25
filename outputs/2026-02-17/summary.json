@@ -1,0 +1,21 @@
+{
+    "timestamp": "2026-02-17T21:06:46.892082",
+    "metrics": {
+        "average_price": 12.33,
+        "min_price": -15.89,
+        "max_price": 44.43,
+        "price_range": 60.33,
+        "volatility": 16.81,
+        "observations": 2520,
+        "risk_level": "Medium"
+    },
+    "revenue": {
+        "scenario": "base",
+        "battery_size_mwh": 2,
+        "efficiency": 0.9,
+        "cycles_per_day": 1.0,
+        "simple_revenue_estimate": 24.66,
+        "arbitrage_proxy_revenue": 108.59
+    },
+    "memo": "# Battery Storage Underwriting Memo\n\n**Asset:** 2 MWh Battery Energy Storage System\n**Period:** February 10\u201317, 2026 | **Risk Assessment:** Medium\n\n## Summary\n\nThe subject market exhibits meaningful price dispersion over the evaluation window, with a $60.33/MWh spread between floor and ceiling prices and moderate volatility of 16.81. The presence of negative pricing events (minimum of -$15.89/MWh) creates compelling charge-cycle economics, as the asset can effectively be paid to absorb energy before discharging at peak rates approaching $44.43/MWh. Across 2,520 observations, the arbitrage proxy revenue of $108.59 per cycle significantly exceeds the simple spread-based estimate of $24.66, suggesting consistent intraday price dislocation that a well-optimized dispatch strategy can capture.\n\nAt one cycle per day with 90% round-trip efficiency, annualized revenue extrapolation supports a viable return profile for a moderately leveraged capital structure, though seasonal revenue variability warrants conservative underwriting assumptions beyond this winter window. Key risks include regulatory changes to negative pricing mechanisms, transmission congestion shifts that could compress spreads, and degradation-adjusted cycle economics over the asset's useful life. The medium risk designation reflects balanced upside from volatility-driven arbitrage against merchant price exposure. We recommend proceeding to detailed financial modeling with stress-tested scenarios across shoulder and summer months."
+}

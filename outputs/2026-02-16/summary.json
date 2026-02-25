@@ -1,0 +1,21 @@
+{
+    "timestamp": "2026-02-16T20:32:25.618543",
+    "metrics": {
+        "average_price": 12.03,
+        "min_price": -15.89,
+        "max_price": 44.43,
+        "price_range": 60.33,
+        "volatility": 16.56,
+        "observations": 2520,
+        "risk_level": "Medium"
+    },
+    "revenue": {
+        "scenario": "base",
+        "battery_size_mwh": 2,
+        "efficiency": 0.9,
+        "cycles_per_day": 1.0,
+        "simple_revenue_estimate": 24.06,
+        "arbitrage_proxy_revenue": 108.59
+    },
+    "memo": "# Underwriting Memo: Battery Energy Storage Investment\n\n**Period Under Review:** February 9\u201316, 2026 | **Risk Assessment:** Medium\n\nThe analyzed node exhibits a weekly average clearing price of $12.03/MWh with significant spread potential, as evidenced by a $60.33 price range spanning from -$15.89 to $44.43/MWh. This negative pricing floor presents a compelling dual-revenue opportunity: the 2 MWh asset can capture revenue both by charging during surplus conditions and discharging at peak rates.\n\nThe arbitrage proxy revenue of $108.59 per week materially exceeds the simple revenue estimate of $24.06, suggesting meaningful intraday spread capture beyond average price assumptions. Annualized, the arbitrage trajectory implies approximately $5,647 in gross revenue for a 2 MWh system operating at 90% round-trip efficiency with single daily cycling, though seasonal variation will significantly affect this figure.\n\nVolatility at 16.56 is moderate and sufficient to sustain arbitrage margins, though not so elevated as to indicate grid instability or regulatory intervention risk. The 2,520 observations across the window provide robust statistical confidence.\n\nKey risks include compressed spreads during shoulder months, potential negative revenue days when volatility contracts, and basis risk relative to contracted settlement nodes. The medium risk designation reflects balanced upside from price dispersion against moderate market uncertainty. Further diligence on capacity payments and ancillary service stacking is recommended."
+}

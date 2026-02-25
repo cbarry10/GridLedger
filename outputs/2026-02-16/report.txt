@@ -1,0 +1,27 @@
+
+GRIDLEDGER REVENUE SNAPSHOT
+Timestamp: 2026-02-16T20:32:25.618543
+
+Average Price: 12.03
+Min Price: -15.89
+Max Price: 44.43
+Price Range: 60.33
+Volatility: 16.56
+Risk Level: Medium
+
+Revenue Estimate:
+Simple Revenue: 24.06
+Arbitrage Proxy: 108.59
+
+AI Memo:
+# Underwriting Memo: Battery Energy Storage Investment
+
+**Period Under Review:** February 9–16, 2026 | **Risk Assessment:** Medium
+
+The analyzed node exhibits a weekly average clearing price of $12.03/MWh with significant spread potential, as evidenced by a $60.33 price range spanning from -$15.89 to $44.43/MWh. This negative pricing floor presents a compelling dual-revenue opportunity: the 2 MWh asset can capture revenue both by charging during surplus conditions and discharging at peak rates.
+
+The arbitrage proxy revenue of $108.59 per week materially exceeds the simple revenue estimate of $24.06, suggesting meaningful intraday spread capture beyond average price assumptions. Annualized, the arbitrage trajectory implies approximately $5,647 in gross revenue for a 2 MWh system operating at 90% round-trip efficiency with single daily cycling, though seasonal variation will significantly affect this figure.
+
+Volatility at 16.56 is moderate and sufficient to sustain arbitrage margins, though not so elevated as to indicate grid instability or regulatory intervention risk. The 2,520 observations across the window provide robust statistical confidence.
+
+Key risks include compressed spreads during shoulder months, potential negative revenue days when volatility contracts, and basis risk relative to contracted settlement nodes. The medium risk designation reflects balanced upside from price dispersion against moderate market uncertainty. Further diligence on capacity payments and ancillary service stacking is recommended.

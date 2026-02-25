@@ -1,0 +1,15 @@
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+.dist/
+.build/
+.env
+.venv
+venv/
+ENV/
+.env.*
+*.sqlite3
+.DS_Store
+openclaw/
