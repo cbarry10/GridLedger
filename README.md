@@ -22,6 +22,10 @@ GridLedger is a deterministic pipeline that:
 
 The goal: go from **raw prices → revenue & risk snapshot → investor-ready memo** in one command.
 
+### 📸 Example Output
+
+![GridLedger Output](gridledger-outputvisual.png)
+
 ---
 
 ## Architecture
