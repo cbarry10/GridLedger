@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GridLedger Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0d1117;
+      --surface:   #161b22;
+      --border:    #30363d;
+      --accent:    #00d4aa;
+      --accent-dim:#00a884;
+      --text:      #e6edf3;
+      --muted:     #8b949e;
+      --low:       #3fb950;
+      --medium:    #d29922;
+      --high:      #f85149;
+      --np15:      #58a6ff;
+      --sp15:      #3fb950;
+      --zp26:      #f78166;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-size: 14px;
+      min-height: 100vh;
+    }
+
+    /* ---- Header ---- */
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 16px 28px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .brand { display: flex; align-items: baseline; gap: 10px; }
+    .brand h1 { font-size: 20px; font-weight: 700; color: var(--accent); letter-spacing: -0.3px; }
+    .brand span { font-size: 13px; color: var(--muted); }
+    #run-meta { font-size: 12px; color: var(--muted); text-align: right; line-height: 1.6; }
+    #run-meta strong { color: var(--text); }
+
+    /* ---- Layout ---- */
+    main { max-width: 1280px; margin: 0 auto; padding: 24px 28px; display: flex; flex-direction: column; gap: 24px; }
+
+    /* ---- Metric cards ---- */
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 14px;
+    }
+    @media (max-width: 900px) { .cards { grid-template-columns: repeat(3, 1fr); } }
+    @media (max-width: 600px) { .cards { grid-template-columns: repeat(2, 1fr); } }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 18px 20px;
+    }
+    .card-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.6px; color: var(--muted); margin-bottom: 8px; }
+    .card-value { font-size: 26px; font-weight: 700; color: var(--text); line-height: 1; }
+    .card-sub { font-size: 11px; color: var(--muted); margin-top: 5px; }
+
+    .risk-badge {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+    }
+    .risk-Low    { background: rgba(63,185,80,.15); color: var(--low); }
+    .risk-Medium { background: rgba(210,153,34,.15); color: var(--medium); }
+    .risk-High   { background: rgba(248,81,73,.15); color: var(--high); }
+
+    /* ---- Two-column row ---- */
+    .row-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+    }
+    @media (max-width: 768px) { .row-2 { grid-template-columns: 1fr; } }
+
+    /* ---- Panels ---- */
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      display: flex;
+      flex-direction: column;
+    }
+    .panel-header {
+      padding: 14px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .panel-title { font-size: 13px; font-weight: 600; color: var(--text); }
+    .panel-tag { font-size: 11px; color: var(--muted); background: var(--bg); border: 1px solid var(--border); border-radius: 4px; padding: 2px 7px; }
+    .panel-body { padding: 20px; flex: 1; }
+
+    /* Slack output */
+    #slack-output {
+      font-family: "SF Mono", "Fira Code", "Cascadia Code", monospace;
+      font-size: 12px;
+      line-height: 1.7;
+      color: #cdd9e5;
+      white-space: pre-wrap;
+      max-height: 340px;
+      overflow-y: auto;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 14px 16px;
+    }
+    #slack-output::-webkit-scrollbar { width: 6px; }
+    #slack-output::-webkit-scrollbar-track { background: transparent; }
+    #slack-output::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+    /* Revenue breakdown */
+    .revenue-table { width: 100%; border-collapse: collapse; }
+    .revenue-table tr { border-bottom: 1px solid var(--border); }
+    .revenue-table tr:last-child { border-bottom: none; }
+    .revenue-table td { padding: 10px 0; font-size: 13px; }
+    .revenue-table td:first-child { color: var(--muted); }
+    .revenue-table td:last-child { text-align: right; font-weight: 600; color: var(--text); }
+    .revenue-highlight { color: var(--accent) !important; font-size: 18px !important; }
+
+    /* ---- Chart ---- */
+    .chart-panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+    }
+    .chart-body { padding: 20px; position: relative; height: 320px; }
+
+    /* ---- Download ---- */
+    .download-row { display: flex; justify-content: flex-end; }
+    .btn-download {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--accent);
+      color: #000;
+      font-weight: 700;
+      font-size: 13px;
+      padding: 10px 20px;
+      border-radius: 8px;
+      text-decoration: none;
+      transition: background 0.15s;
+    }
+    .btn-download:hover { background: var(--accent-dim); }
+    .btn-download svg { width: 16px; height: 16px; }
+
+    /* ---- Empty / Error states ---- */
+    .empty { color: var(--muted); font-size: 13px; padding: 24px; text-align: center; }
+
+    /* ---- Scrollbar global ---- */
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: var(--bg); }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <h1>GridLedger</h1>
+    <span>Revenue Intelligence</span>
+  </div>
+  <div id="run-meta">
+    <div>CAISO Day-Ahead Market</div>
+    <div>Last run: <strong id="run-timestamp">—</strong></div>
+  </div>
+</header>
+
+<main>
+
+  <!-- Metric cards -->
+  <div class="cards">
+    <div class="card">
+      <div class="card-label">Avg Price</div>
+      <div class="card-value" id="avg-price">—</div>
+      <div class="card-sub">$/MWh</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Price Range</div>
+      <div class="card-value" id="price-range">—</div>
+      <div class="card-sub" id="price-range-sub">spread</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Volatility</div>
+      <div class="card-value" id="volatility">—</div>
+      <div class="card-sub">std dev ($/MWh)</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Risk Level</div>
+      <div class="card-value" style="font-size:18px; padding-top:4px">
+        <span class="risk-badge" id="risk-badge">—</span>
+      </div>
+      <div class="card-sub" id="risk-sub"></div>
+    </div>
+    <div class="card">
+      <div class="card-label">Observations</div>
+      <div class="card-value" id="observations">—</div>
+      <div class="card-sub">hourly data points</div>
+    </div>
+  </div>
+
+  <!-- Slack output + Revenue -->
+  <div class="row-2">
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-title">Slack Output</span>
+        <span class="panel-tag">as sent</span>
+      </div>
+      <div class="panel-body">
+        <div id="slack-output">Loading…</div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-title">Revenue Snapshot</span>
+        <span class="panel-tag" id="scenario-tag">base scenario</span>
+      </div>
+      <div class="panel-body">
+        <table class="revenue-table">
+          <tr>
+            <td>Simple Revenue</td>
+            <td><span id="simple-rev" class="revenue-highlight">—</span></td>
+          </tr>
+          <tr>
+            <td>Arbitrage Revenue</td>
+            <td><span id="arb-rev" class="revenue-highlight">—</span></td>
+          </tr>
+          <tr><td colspan="2" style="padding-top:16px; padding-bottom:4px; font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px">Battery Assumptions</td></tr>
+          <tr>
+            <td>Capacity</td>
+            <td id="capacity">—</td>
+          </tr>
+          <tr>
+            <td>Round-trip Efficiency</td>
+            <td id="efficiency">—</td>
+          </tr>
+          <tr>
+            <td>Cycles / Day</td>
+            <td id="cycles">—</td>
+          </tr>
+          <tr>
+            <td>Scenario</td>
+            <td id="scenario">—</td>
+          </tr>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- LMP Chart -->
+  <div class="chart-panel">
+    <div class="panel-header">
+      <span class="panel-title">LMP Prices — 7-Day Hourly</span>
+      <span class="panel-tag">NP15 · SP15 · ZP26</span>
+    </div>
+    <div class="chart-body">
+      <canvas id="lmpChart"></canvas>
+    </div>
+  </div>
+
+  <!-- Download -->
+  <div class="download-row">
+    <a class="btn-download" href="/download/csv" download>
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3"/>
+      </svg>
+      Download metrics.csv
+    </a>
+  </div>
+
+</main>
+
+<script>
+  // ---- Utilities ----
+  function fmt(val, decimals = 2) {
+    const n = parseFloat(val);
+    const abs = Math.abs(n).toFixed(decimals);
+    return (n < 0 ? '-$' : '$') + abs;
+  }
+
+  function fmtNum(val) {
+    return parseFloat(val).toLocaleString();
+  }
+
+  // ---- Populate metric cards + panels ----
+  async function loadLatest() {
+    let data;
+    try {
+      const res = await fetch('/api/latest');
+      if (!res.ok) {
+        const err = await res.json();
+        document.getElementById('slack-output').textContent = err.error || 'Failed to load data.';
+        return;
+      }
+      data = await res.json();
+    } catch (e) {
+      document.getElementById('slack-output').textContent = 'Error connecting to server.';
+      return;
+    }
+
+    const m = data.metrics;
+    const r = data.revenue;
+    const ts = new Date(data.timestamp);
+
+    // Header
+    document.getElementById('run-timestamp').textContent =
+      ts.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) +
+      ' ' + ts.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+
+    // Metric cards
+    document.getElementById('avg-price').textContent = fmt(m.average_price);
+    document.getElementById('price-range').textContent = fmt(m.price_range);
+    document.getElementById('price-range-sub').textContent =
+      fmt(m.min_price) + ' → ' + fmt(m.max_price);
+    document.getElementById('volatility').textContent = parseFloat(m.volatility).toFixed(2);
+    document.getElementById('observations').textContent = fmtNum(m.observations);
+
+    const badge = document.getElementById('risk-badge');
+    badge.textContent = m.risk_level;
+    badge.className = 'risk-badge risk-' + m.risk_level;
+    document.getElementById('risk-sub').textContent =
+      m.risk_level === 'Low' ? 'volatility < 10' :
+      m.risk_level === 'Medium' ? '10 ≤ volatility < 20' : 'volatility ≥ 20';
+
+    // Slack output panel
+    document.getElementById('slack-output').textContent = data.slack_output;
+
+    // Revenue panel
+    document.getElementById('simple-rev').textContent = fmt(r.simple_revenue_estimate);
+    document.getElementById('arb-rev').textContent = fmt(r.arbitrage_proxy_revenue);
+    document.getElementById('capacity').textContent = r.battery_size_mwh + ' MWh';
+    document.getElementById('efficiency').textContent =
+      Math.round(r.efficiency * 100) + '%';
+    document.getElementById('cycles').textContent =
+      parseFloat(r.cycles_per_day).toFixed(1);
+    document.getElementById('scenario').textContent =
+      r.scenario.charAt(0).toUpperCase() + r.scenario.slice(1);
+    document.getElementById('scenario-tag').textContent = r.scenario + ' scenario';
+  }
+
+  // ---- Render LMP chart ----
+  async function loadChart() {
+    let priceData;
+    try {
+      const res = await fetch('/api/prices');
+      if (!res.ok) return;
+      priceData = await res.json();
+    } catch (e) { return; }
+
+    const nodeColors = {
+      'TH_NP15_GEN-APND': { border: '#58a6ff', bg: 'rgba(88,166,255,0.1)' },
+      'TH_SP15_GEN-APND': { border: '#3fb950', bg: 'rgba(63,185,80,0.1)'  },
+      'TH_ZP26_GEN-APND': { border: '#f78166', bg: 'rgba(247,129,102,0.1)'},
+    };
+    const nodeLabels = {
+      'TH_NP15_GEN-APND': 'NP15',
+      'TH_SP15_GEN-APND': 'SP15',
+      'TH_ZP26_GEN-APND': 'ZP26',
+    };
+
+    const datasets = Object.entries(priceData.datasets).map(([node, values]) => {
+      const color = nodeColors[node] || { border: '#8b949e', bg: 'rgba(139,148,158,0.1)' };
+      return {
+        label: nodeLabels[node] || node,
+        data: values,
+        borderColor: color.border,
+        backgroundColor: color.bg,
+        borderWidth: 1.5,
+        pointRadius: 0,
+        pointHoverRadius: 4,
+        tension: 0.3,
+        fill: false,
+      };
+    });
+
+    // Sample labels to avoid x-axis crowding — show every 24th label (daily)
+    const rawLabels = priceData.labels;
+    const tickLabels = rawLabels.map((l, i) => (i % 24 === 0 ? l.slice(0, 10) : ''));
+
+    new Chart(document.getElementById('lmpChart'), {
+      type: 'line',
+      data: { labels: rawLabels, datasets },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: {
+            position: 'top',
+            labels: {
+              color: '#8b949e',
+              font: { size: 12 },
+              boxWidth: 12,
+              padding: 16,
+            },
+          },
+          tooltip: {
+            backgroundColor: '#1c2128',
+            titleColor: '#cdd9e5',
+            bodyColor: '#8b949e',
+            borderColor: '#30363d',
+            borderWidth: 1,
+            callbacks: {
+              title: (items) => items[0].label,
+              label: (item) => ` ${item.dataset.label}: $${Number(item.raw).toFixed(2)}/MWh`,
+            },
+          },
+        },
+        scales: {
+          x: {
+            ticks: {
+              color: '#8b949e',
+              font: { size: 11 },
+              maxRotation: 0,
+              callback: (_, i) => tickLabels[i] || null,
+            },
+            grid: { color: 'rgba(48,54,61,0.5)' },
+          },
+          y: {
+            ticks: {
+              color: '#8b949e',
+              font: { size: 11 },
+              callback: (v) => '$' + v.toFixed(0),
+            },
+            grid: { color: 'rgba(48,54,61,0.5)' },
+            title: {
+              display: true,
+              text: '$/MWh',
+              color: '#8b949e',
+              font: { size: 11 },
+            },
+          },
+        },
+      },
+    });
+  }
+
+  // ---- Init ----
+  loadLatest();
+  loadChart();
+</script>
+</body>
+</html>

@@ -1,3 +1,6 @@
 requests
 pandas
 python-dotenv
+flask
+anthropic
+slack-bolt
