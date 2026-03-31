@@ -24,9 +24,7 @@ The goal: go from **raw prices → revenue & risk snapshot → investor-ready me
 
 ### 📸 Example Output
 
-<p align="center">
-  <img src="gridledger-outputvisual.png" alt="GridLedger Output" width="400"/>
-</p>
+<img src="gridledger-outputvisual.png" alt="GridLedger Output" width="400"/>
 
 ---
 
