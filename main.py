@@ -9,6 +9,8 @@ from gridledger.tasks.risk import classify_volatility_risk
 from gridledger.tasks.memo import generate_underwriting_memo
 from gridledger.tasks.output import save_structured_outputs
 from gridledger.config.settings import DEFAULT_START_DATE, DEFAULT_END_DATE, OUTPUT_DIR
+from gridledger.config.prompts import ACTIVE_PROMPT_VERSION
+from gridledger.analytics.run_logger import log_run
 
 DEBUG = False
 
@@ -147,6 +149,15 @@ def main():
     scenario = "base"
     revenue = _run_step(estimate_revenue, metrics, scenario=scenario)
 
+    # Log run and get run_id for correlation with eval log
+    run_date = datetime.now().strftime("%Y-%m-%d")
+    run_id = log_run(
+        metrics=metrics,
+        revenue=revenue,
+        prompt_version=ACTIVE_PROMPT_VERSION,
+        output_dir=OUTPUT_DIR / run_date,
+    )
+
     # Keep memo generation in place for archival/debug workflows, but do not print to Slack output.
     memo = _run_step(
         generate_underwriting_memo,
@@ -155,6 +166,7 @@ def main():
         risk_level=metrics["risk_level"],
         start_date=DEFAULT_START_DATE,
         end_date=DEFAULT_END_DATE,
+        run_id=run_id,
     )
 
     memo_path = OUTPUT_DIR / "memo.txt"
