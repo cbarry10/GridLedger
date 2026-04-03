@@ -1,0 +1,1 @@
+/Users/chrisbarry/gridledger/.claude/worktrees/brave-villani/.claude/skills/gstack/learn/SKILL.md
