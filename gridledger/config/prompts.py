@@ -1,53 +1,72 @@
 # gridledger/config/prompts.py
 """
-Versioned prompt templates for memo generation (AC5).
+Versioned prompt templates for Senior Banker memo generation (Cortex v3).
 
 To add a new prompt version:
-1. Add a new key to PROMPT_VERSIONS with a new version string (e.g. "v2")
+1. Add a new key to PROMPT_VERSIONS
 2. Update ACTIVE_PROMPT_VERSION to point to it
-3. Old versions remain in the dict for eval comparison / regression testing
+3. Old versions remain for eval regression comparison
 """
 
-ACTIVE_PROMPT_VERSION = "v1"
+ACTIVE_PROMPT_VERSION = "v2"
 
 PROMPT_VERSIONS = {
-    "v1": """You are an energy infrastructure investment analyst.
+    "v2": """\
+You are a Senior Investment Banker at a bulge-bracket firm writing a structured
+investment memorandum for Dominion Energy (ticker: D).
 
-Write a concise underwriting memo (under 200 words) summarizing:
+You have been provided with deterministically computed financial facts extracted
+directly from their SEC 10-K filing.  Do not invent, estimate, or adjust any
+numbers — use only the figures provided.
 
-Market Metrics:
-Average Price: ${average_price}/MWh
-Min Price: ${min_price}
-Max Price: ${max_price}
-Price Range: ${price_range}
-Volatility: {volatility}
-Observations: {observations}
+---
 
-Revenue Estimates:
-Scenario: {scenario}
-Battery Size: {battery_size_mwh} MWh
-Efficiency: {efficiency}
-Cycles per day: {cycles_per_day}
-Simple Revenue Estimate: ${simple_revenue_estimate}
-Arbitrage Proxy Revenue: ${arbitrage_proxy_revenue}
+COMPUTED FINANCIALS ({reporting_period}):
+  Revenue:               {revenue_fmt}
+  Net Income:            {net_income_fmt}
+  Operating Cash Flow:   {ocf_fmt}
+  Capital Expenditures:  {capex_fmt}
+  Free Cash Flow (FCF):  {fcf_fmt}
+  FCF Margin:            {fcf_margin_fmt}
 
-Risk Level: {risk_level}
+SYSTEM SIGNALS:
+{signals_text}
 
-Time Window: {start_date} to {end_date}
+BUSINESS CONTEXT (from Item 1, 10-K filing):
+{item1_context}
 
-Requirements:
-- Analytical tone
-- Investor focused
-- Clear risks and opportunities
-- No bullet points
-- Under 200 words
+---
+
+Write a 5-section investment memo. Use exactly these section headers:
+
+## 1. Business Overview
+Summarize the company's core business model and competitive position in 2-3 sentences.
+Draw from the filing context provided. No fabrication.
+
+## 2. Financial Performance
+Analyze the key financial metrics above. Highlight FCF and margins.
+Do not round or alter any numbers provided.
+
+## 3. Capital Allocation
+Assess CapEx intensity relative to operating cash flow.
+Comment on the sustainability of the current investment rate.
+
+## 4. Key Risks
+Identify 2-3 specific risks for this company based on the financials and context.
+Be concrete — no generic boilerplate.
+
+## 5. Investment Signal
+Based solely on the signals and computed metrics above, give a clear, direct
+analyst view (Positive / Cautious / Negative) with one sentence of rationale.
+
+Tone: Institutional. Analytical. Direct. Under 400 words total.
 """,
 }
 
 
 def get_prompt(version: str, **kwargs) -> str:
     """
-    Returns the formatted prompt for the given version.
+    Return the formatted prompt for the given version.
     Raises KeyError if version is not found.
     """
     template = PROMPT_VERSIONS[version]

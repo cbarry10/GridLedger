@@ -1,4 +1,4 @@
-# dashboard.py — GridLedger Streamlit Dashboard
+# dashboard.py — Cortex AI Financial Intelligence System
 # Run: streamlit run dashboard.py --server.port 5050
 
 import json
@@ -32,20 +32,21 @@ def find_latest_summary() -> dict | None:
 
 
 @st.cache_data(ttl=300)
-def find_latest_metrics_csv() -> Path | None:
-    candidates = sorted(OUTPUTS_DIR.glob("*/metrics.csv"))
-    return candidates[-1] if candidates else None
+def find_latest_world_model() -> dict | None:
+    candidates = sorted(OUTPUTS_DIR.glob("*/world_model.json"))
+    if not candidates:
+        return None
+    with open(candidates[-1]) as f:
+        return json.load(f)
 
 
 @st.cache_data(ttl=300)
-def load_lmp_data() -> pd.DataFrame | None:
-    path = DATA_DIR / "hourly_lmp.csv"
-    if not path.exists():
+def find_latest_signals() -> dict | None:
+    candidates = sorted(OUTPUTS_DIR.glob("*/signals.json"))
+    if not candidates:
         return None
-    df = pd.read_csv(path)
-    df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True)
-    df["lmp"] = pd.to_numeric(df["lmp"], errors="coerce")
-    return df.dropna(subset=["lmp"])
+    with open(candidates[-1]) as f:
+        return json.load(f)
 
 
 @st.cache_data(ttl=300)
@@ -71,22 +72,43 @@ def _load_eval_history():
 # ---------------------------------------------------------------------------
 
 st.set_page_config(
-    page_title="GridLedger Dashboard",
-    page_icon="⚡",
+    page_title="Cortex — AI Financial Intelligence",
+    page_icon="🧠",
     layout="wide",
     initial_sidebar_state="collapsed",
 )
 
-st.title("⚡ GridLedger — CAISO Battery Storage Analytics")
-st.caption(f"Dashboard refreshed at {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}")
+st.title("🧠 Cortex — AI Financial Intelligence System")
+st.caption(
+    f"Dominion Energy (D) · SEC 10-K · "
+    f"Dashboard refreshed at {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}"
+)
 
-tab1, tab2, tab3, tab4, tab5 = st.tabs([
+tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
     "📋 Executive Summary",
-    "📈 LMP Price Chart",
-    "📥 Metrics Export",
+    "📈 FCF History",
+    "📥 Data Export",
     "👥 Usage Analytics",
-    "🧪 LLM Eval Scorecard",
+    "🧪 Eval Scorecard",
+    "🌐 World Model",
+    "⚡ Signals",
 ])
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+def _fmt(v: int | None) -> str:
+    if v is None:
+        return "N/A"
+    if abs(v) >= 1_000_000_000:
+        return f"${v / 1_000_000_000:.1f}B"
+    return f"${v / 1_000_000:.1f}M"
+
+
+def _fmt_pct(v: float | None) -> str:
+    return f"{v:.2%}" if v is not None else "N/A"
+
 
 # ---------------------------------------------------------------------------
 # Tab 1 — Executive Summary
@@ -102,106 +124,140 @@ with tab1:
             ts_fmt = datetime.fromisoformat(ts).strftime("%B %-d, %Y at %H:%M UTC")
         except Exception:
             ts_fmt = ts
-        st.caption(f"Generated: {ts_fmt}")
+        st.caption(f"Generated: {ts_fmt} · Period: {summary.get('reporting_period', 'N/A')}")
 
-        metrics = summary["metrics"]
-        revenue = summary["revenue"]
+        fcf = summary.get("fcf", {})
+        signals = summary.get("signals", {})
 
-        # Row 1: price metrics
+        # Row 1: computed financials
         col1, col2, col3, col4 = st.columns(4)
-        col1.metric("Avg Price", f"${metrics['average_price']:.2f}/MWh")
-        col2.metric("Min Price", f"${metrics['min_price']:.2f}/MWh")
-        col3.metric("Max Price", f"${metrics['max_price']:.2f}/MWh")
-        col4.metric("Volatility", f"{metrics['volatility']:.2f}")
+        col1.metric("Revenue", _fmt(fcf.get("revenue")))
+        col2.metric("Operating Cash Flow", _fmt(fcf.get("operating_cash_flow")))
+        col3.metric("CapEx", _fmt(fcf.get("capex")))
+        col4.metric("Free Cash Flow", _fmt(fcf.get("fcf")))
 
-        # Row 2: revenue + risk
+        # Row 2: margins + signals
         col5, col6, col7, col8 = st.columns(4)
-        col5.metric("Risk Level", metrics["risk_level"])
-        col6.metric("Observations", f"{metrics['observations']:,}")
-        col7.metric("Simple Revenue", f"${revenue['simple_revenue_estimate']:.2f}")
-        col8.metric("Arbitrage Revenue", f"${revenue['arbitrage_proxy_revenue']:.2f}")
+        col5.metric("FCF Margin", _fmt_pct(fcf.get("fcf_margin")))
+        col6.metric("Net Income", _fmt(fcf.get("net_income")))
+        col7.metric("Signal Count", signals.get("signal_count", 0))
+        col8.metric("Reporting Period", summary.get("reporting_period", "N/A"))
 
         st.divider()
+
+        if signals.get("next_best_action"):
+            st.info(f"⚡ **Next Best Action:** {signals['next_best_action']}")
+
         st.subheader("Investment Memo")
-        st.caption(f"Scenario: {revenue['scenario']} · {revenue['battery_size_mwh']} MWh · "
-                   f"{int(revenue['efficiency']*100)}% efficiency · "
-                   f"{revenue['cycles_per_day']} cycle/day")
-        st.markdown(summary["memo"])
+        st.markdown(summary.get("memo", "_No memo generated_"))
+
+        if fcf.get("errors"):
+            with st.expander("⚠️ Computation warnings"):
+                for err in fcf["errors"]:
+                    st.warning(err)
 
 # ---------------------------------------------------------------------------
-# Tab 2 — 7-Day LMP Price Chart
+# Tab 2 — FCF History (run log)
 # ---------------------------------------------------------------------------
 
 with tab2:
-    lmp_df = load_lmp_data()
-    if lmp_df is None or lmp_df.empty:
-        st.info("No LMP data yet — run `python main.py` first")
+    runs = _load_run_history()
+    if not runs:
+        st.info("No run history yet — run `python main.py` first")
     else:
-        NODE_COLORS = {
-            "TH_NP15_GEN-APND": "#1f77b4",
-            "TH_SP15_GEN-APND": "#ff7f0e",
-            "TH_ZP26_GEN-APND": "#2ca02c",
-        }
+        run_df = pd.DataFrame(runs)
+        run_df["timestamp"] = pd.to_datetime(run_df.get("timestamp", []), utc=True, errors="coerce")
 
-        fig = px.line(
-            lmp_df,
-            x="timestamp",
-            y="lmp",
-            color="node",
-            color_discrete_map=NODE_COLORS,
-            title="7-Day Hourly LMP by Node ($/MWh)",
-            labels={"timestamp": "Hour", "lmp": "LMP ($/MWh)", "node": "Node"},
-        )
-        fig.add_hline(
-            y=0,
-            line_dash="dash",
-            line_color="red",
-            annotation_text="$0 threshold",
-            annotation_position="top left",
-        )
-        fig.update_layout(
-            hovermode="x unified",
-            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-            margin=dict(l=40, r=20, t=60, b=40),
-            height=450,
-        )
-        st.plotly_chart(fig, width="stretch")
+        numeric_cols = ["revenue", "net_income", "operating_cash_flow", "capex", "fcf", "fcf_margin"]
+        for col in numeric_cols:
+            if col in run_df.columns:
+                run_df[col] = pd.to_numeric(run_df[col], errors="coerce")
 
-        st.subheader("Node Summary Statistics")
-        node_stats = (
-            lmp_df.groupby("node")["lmp"]
-            .agg(["mean", "min", "max", "std"])
-            .rename(columns={"mean": "Avg ($/MWh)", "min": "Min", "max": "Max", "std": "Std Dev"})
-            .round(2)
-        )
-        st.dataframe(node_stats, width="stretch")
+        if "fcf" in run_df.columns and not run_df["fcf"].dropna().empty:
+            st.subheader("Free Cash Flow Over Time")
+            fig_fcf = px.bar(
+                run_df.dropna(subset=["fcf"]).sort_values("timestamp"),
+                x="timestamp",
+                y="fcf",
+                labels={"timestamp": "Run Date", "fcf": "FCF ($)"},
+                color_discrete_sequence=["#1f77b4"],
+            )
+            fig_fcf.add_hline(y=0, line_dash="dash", line_color="red")
+            fig_fcf.update_layout(height=350, margin=dict(t=20, b=40))
+            st.plotly_chart(fig_fcf, use_container_width=True)
+
+        if "fcf_margin" in run_df.columns and not run_df["fcf_margin"].dropna().empty:
+            st.subheader("FCF Margin Over Time")
+            fig_margin = px.line(
+                run_df.dropna(subset=["fcf_margin"]).sort_values("timestamp"),
+                x="timestamp",
+                y="fcf_margin",
+                markers=True,
+                labels={"timestamp": "Run Date", "fcf_margin": "FCF Margin"},
+            )
+            fig_margin.add_hline(
+                y=0.05,
+                line_dash="dash",
+                line_color="orange",
+                annotation_text="5% threshold",
+                annotation_position="top left",
+            )
+            fig_margin.update_layout(height=300, margin=dict(t=20, b=40))
+            st.plotly_chart(fig_margin, use_container_width=True)
+
+        st.subheader("All Runs")
+        display_cols = ["timestamp", "ticker", "reporting_period", "revenue", "fcf",
+                        "fcf_margin", "signal_count", "prompt_version"]
+        available = [c for c in display_cols if c in run_df.columns]
+        st.dataframe(run_df.sort_values("timestamp", ascending=False)[available].head(20),
+                     use_container_width=True)
 
 # ---------------------------------------------------------------------------
-# Tab 3 — Metrics CSV Export
+# Tab 3 — Data Export
 # ---------------------------------------------------------------------------
 
 with tab3:
-    csv_path = find_latest_metrics_csv()
-    if csv_path is None:
-        st.info("No metrics file found — run `python main.py` first")
+    summary = find_latest_summary()
+    if summary is None:
+        st.info("No data yet — run `python main.py` first")
     else:
-        run_date = csv_path.parent.name
-        st.subheader("Latest Metrics Export")
-        st.caption(f"From run: {run_date}")
+        st.subheader("Export Latest Run Data")
+        run_date = datetime.utcnow().strftime("%Y-%m-%d")
 
-        csv_bytes = csv_path.read_bytes()
-
+        # Full summary JSON
+        summary_bytes = json.dumps(summary, indent=2).encode()
         st.download_button(
-            label="⬇️ Download metrics.csv",
-            data=csv_bytes,
-            file_name=f"gridledger_metrics_{run_date}.csv",
-            mime="text/csv",
+            label="⬇️ Download summary.json",
+            data=summary_bytes,
+            file_name=f"cortex_summary_{run_date}.json",
+            mime="application/json",
         )
 
-        st.divider()
-        st.subheader("Preview")
-        preview_df = pd.read_csv(io.BytesIO(csv_bytes))
-        st.dataframe(preview_df, width="stretch")
+        wm = summary.get("world_model", {})
+        if wm:
+            wm_bytes = json.dumps(wm, indent=2).encode()
+            st.download_button(
+                label="⬇️ Download world_model.json",
+                data=wm_bytes,
+                file_name=f"cortex_world_model_{run_date}.json",
+                mime="application/json",
+            )
+
+        # FCF as CSV
+        fcf = summary.get("fcf", {})
+        if fcf:
+            fcf_row = {k: v for k, v in fcf.items() if k != "errors"}
+            fcf_df = pd.DataFrame([fcf_row])
+            st.download_button(
+                label="⬇️ Download fcf_metrics.csv",
+                data=fcf_df.to_csv(index=False).encode(),
+                file_name=f"cortex_fcf_{run_date}.csv",
+                mime="text/csv",
+            )
+
+            st.divider()
+            st.subheader("FCF Metrics Preview")
+            st.dataframe(fcf_df, use_container_width=True)
 
 # ---------------------------------------------------------------------------
 # Tab 4 — Usage Analytics
@@ -213,61 +269,50 @@ with tab4:
         st.info("No run history yet — run `python main.py` first")
     else:
         run_df = pd.DataFrame(runs)
-        run_df["timestamp"] = pd.to_datetime(run_df["timestamp"], utc=True)
+        run_df["timestamp"] = pd.to_datetime(run_df.get("timestamp", []), utc=True, errors="coerce")
 
-        # KPI row
         col1, col2, col3 = st.columns(3)
         col1.metric("Total Runs", len(run_df))
-        col2.metric("Unique Users", run_df["user"].nunique())
-        col3.metric("Prompt Versions", run_df["prompt_version"].nunique())
+        col2.metric("Unique Users", run_df["user"].nunique() if "user" in run_df else "N/A")
+        col3.metric("Prompt Versions", run_df["prompt_version"].nunique() if "prompt_version" in run_df else "N/A")
 
         st.divider()
 
         col_left, col_right = st.columns(2)
-
         with col_left:
-            st.subheader("Runs by User")
-            user_counts = run_df["user"].value_counts().reset_index()
-            user_counts.columns = ["user", "count"]
-            fig_user = px.bar(
-                user_counts, x="user", y="count",
-                labels={"user": "User", "count": "Run Count"},
-                color="user",
-            )
-            fig_user.update_layout(showlegend=False, height=300, margin=dict(t=20, b=40))
-            st.plotly_chart(fig_user, width="stretch")
+            if "signal_count" in run_df.columns:
+                st.subheader("Signal Count Over Time")
+                fig_sig = px.bar(
+                    run_df.sort_values("timestamp"),
+                    x="timestamp",
+                    y="signal_count",
+                    labels={"timestamp": "Run Date", "signal_count": "Signals"},
+                    color_discrete_sequence=["#ff7f0e"],
+                )
+                fig_sig.update_layout(height=280, margin=dict(t=20, b=40))
+                st.plotly_chart(fig_sig, use_container_width=True)
 
         with col_right:
-            st.subheader("Risk Distribution")
-            risk_counts = run_df["risk_level"].value_counts().reset_index()
-            risk_counts.columns = ["risk_level", "count"]
-            RISK_COLORS = {"Low": "#2ca02c", "Medium": "#ff7f0e", "High": "#d62728"}
-            fig_risk = px.pie(
-                risk_counts, names="risk_level", values="count",
-                color="risk_level",
-                color_discrete_map=RISK_COLORS,
-            )
-            fig_risk.update_layout(height=300, margin=dict(t=20, b=20))
-            st.plotly_chart(fig_risk, width="stretch")
-
-        st.subheader("Runs by Scenario")
-        scenario_counts = run_df["scenario"].value_counts().reset_index()
-        scenario_counts.columns = ["scenario", "count"]
-        fig_scenario = px.bar(
-            scenario_counts, x="scenario", y="count",
-            labels={"scenario": "Scenario", "count": "Run Count"},
-            color="scenario",
-        )
-        fig_scenario.update_layout(showlegend=False, height=250, margin=dict(t=10, b=40))
-        st.plotly_chart(fig_scenario, width="stretch")
+            if "memo_word_count" in run_df.columns:
+                st.subheader("Memo Length Over Time")
+                fig_words = px.line(
+                    run_df.sort_values("timestamp"),
+                    x="timestamp",
+                    y="memo_word_count",
+                    markers=True,
+                    labels={"timestamp": "Run Date", "memo_word_count": "Words"},
+                )
+                fig_words.add_hline(y=400, line_dash="dash", line_color="orange",
+                                    annotation_text="400w target")
+                fig_words.update_layout(height=280, margin=dict(t=20, b=40))
+                st.plotly_chart(fig_words, use_container_width=True)
 
         st.subheader("Recent Runs")
-        display_cols = ["timestamp", "user", "scenario", "risk_level",
-                        "avg_price", "volatility", "simple_revenue",
-                        "arbitrage_revenue", "prompt_version"]
-        available_cols = [c for c in display_cols if c in run_df.columns]
-        recent = run_df.sort_values("timestamp", ascending=False).head(20)[available_cols]
-        st.dataframe(recent, width="stretch")
+        display_cols = ["timestamp", "user", "ticker", "reporting_period",
+                        "fcf", "fcf_margin", "signal_count", "prompt_version"]
+        available = [c for c in display_cols if c in run_df.columns]
+        st.dataframe(run_df.sort_values("timestamp", ascending=False).head(20)[available],
+                     use_container_width=True)
 
 # ---------------------------------------------------------------------------
 # Tab 5 — LLM Eval Scorecard
@@ -281,91 +326,173 @@ with tab5:
         eval_df = pd.json_normalize(evals)
 
         score_col_map = {
-            "scores.composite_score":     "composite_score",
-            "scores.numeric_fidelity":    "numeric_fidelity",
-            "scores.risk_tone_alignment": "risk_tone_alignment",
-            "scores.length_compliance":   "length_compliance",
-            "scores.has_recommendation":  "has_recommendation",
-            "scores.hedge_present":       "hedge_present",
-            "scores.no_bullets":          "no_bullets",
-            "scores.word_count":          "word_count",
+            "scores.composite_score":  "composite_score",
+            "scores.numeric_fidelity": "numeric_fidelity",
+            "scores.section_coverage": "section_coverage",
+            "scores.length_compliance": "length_compliance",
+            "scores.has_recommendation": "has_recommendation",
+            "scores.hedge_present":     "hedge_present",
+            "scores.word_count":        "word_count",
         }
         eval_df = eval_df.rename(columns=score_col_map)
-        eval_df["timestamp"] = pd.to_datetime(eval_df["timestamp"], utc=True)
+        eval_df["timestamp"] = pd.to_datetime(eval_df["timestamp"], utc=True, errors="coerce")
 
-        # KPI row
         col1, col2, col3, col4 = st.columns(4)
         col1.metric("Composite Score (avg)",
                     f"{eval_df['composite_score'].mean():.3f}" if "composite_score" in eval_df else "N/A")
         col2.metric("Numeric Fidelity (avg)",
                     f"{eval_df['numeric_fidelity'].mean():.3f}" if "numeric_fidelity" in eval_df else "N/A")
-        col3.metric("Risk Tone Alignment (avg)",
-                    f"{eval_df['risk_tone_alignment'].mean():.3f}" if "risk_tone_alignment" in eval_df else "N/A")
+        col3.metric("Section Coverage (avg)",
+                    f"{eval_df['section_coverage'].mean():.3f}" if "section_coverage" in eval_df else "N/A")
         col4.metric("Total Evaluations", len(eval_df))
 
         st.divider()
 
-        # Hallucination alerts
         if "numeric_fidelity" in eval_df.columns:
             flagged = eval_df[eval_df["numeric_fidelity"] < 0.6]
             if not flagged.empty:
-                st.warning(f"⚠️ Hallucination alert: {len(flagged)} eval(s) with numeric_fidelity < 0.6")
+                st.warning(f"⚠️ Numeric fidelity alert: {len(flagged)} eval(s) below 0.6")
                 with st.expander("Show flagged evaluations"):
                     flag_cols = ["timestamp", "run_id", "prompt_version",
                                  "numeric_fidelity", "composite_score"]
                     available = [c for c in flag_cols if c in flagged.columns]
-                    st.dataframe(flagged[available], width="stretch")
+                    st.dataframe(flagged[available], use_container_width=True)
 
-        # Composite score over time
-        st.subheader("Composite Score Over Time")
         if "composite_score" in eval_df.columns:
+            st.subheader("Composite Score Over Time")
             fig_score = px.line(
                 eval_df.sort_values("timestamp"),
                 x="timestamp",
                 y="composite_score",
-                color="prompt_version",
+                color="prompt_version" if "prompt_version" in eval_df else None,
                 markers=True,
-                labels={
-                    "timestamp": "Evaluation Time",
-                    "composite_score": "Composite Score",
-                    "prompt_version": "Prompt Version",
-                },
+                labels={"timestamp": "Evaluation Time", "composite_score": "Composite Score"},
             )
-            fig_score.add_hline(
-                y=0.7,
-                line_dash="dash",
-                line_color="orange",
-                annotation_text="Target (0.70)",
-                annotation_position="top left",
-            )
+            fig_score.add_hline(y=0.7, line_dash="dash", line_color="orange",
+                                annotation_text="Target (0.70)")
             fig_score.update_layout(height=350, margin=dict(t=20, b=40))
-            st.plotly_chart(fig_score, width="stretch")
+            st.plotly_chart(fig_score, use_container_width=True)
 
-        # Per-prompt-version aggregate table
-        st.subheader("Scores by Prompt Version")
-        score_cols = ["composite_score", "numeric_fidelity", "risk_tone_alignment",
-                      "length_compliance", "has_recommendation", "hedge_present", "no_bullets"]
-        available_score_cols = [c for c in score_cols if c in eval_df.columns]
-        if available_score_cols and "prompt_version" in eval_df.columns:
-            version_table = (
-                eval_df.groupby("prompt_version")[available_score_cols]
-                .mean()
-                .round(3)
-            )
-            st.dataframe(version_table, width="stretch")
-
-        # Metric guide
         with st.expander("Metric definitions"):
             st.markdown("""
 | Metric | Weight | Description |
 |---|---|---|
-| `numeric_fidelity` | 35% | Fraction of key input numbers appearing in memo — primary hallucination detector |
-| `risk_tone_alignment` | 25% | Memo tone keywords match computed risk level |
-| `length_compliance` | 15% | Output ≤ 200 words per prompt spec |
-| `has_recommendation` | 10% | Directional investment language present |
-| `hedge_present` | 10% | Uncertainty qualifiers present (calibration) |
-| `no_bullets` | 5% | Prose-only format respected |
-| `composite_score` | — | Weighted aggregate of above (0.0–1.0) |
+| `numeric_fidelity` | 30% | Source financial values appear in memo within 1% tolerance |
+| `section_coverage` | 30% | All 5 required sections present (Business Overview, Financial Performance, Capital Allocation, Key Risks, Investment Signal) |
+| `has_recommendation` | 15% | Directional investment language present |
+| `length_compliance` | 15% | Output ≤ 400 words per prompt spec |
+| `hedge_present` | 10% | Uncertainty qualifiers present |
+| `composite_score` | — | Weighted aggregate (0.0–1.0) |
 
-*Enable LLM-as-judge scoring: `GRIDLEDGER_LLM_EVAL=1 python main.py`*
+*Enable LLM-as-judge: `GRIDLEDGER_LLM_EVAL=1 python main.py`*
             """)
+
+# ---------------------------------------------------------------------------
+# Tab 6 — World Model
+# ---------------------------------------------------------------------------
+
+with tab6:
+    wm = find_latest_world_model()
+    if wm is None:
+        # Fall back to summary.world_model
+        summary = find_latest_summary()
+        wm = summary.get("world_model") if summary else None
+
+    if wm is None:
+        st.info("No World Model yet — run `python main.py` first")
+    else:
+        meta = wm.get("meta", {})
+        state = wm.get("state", {})
+        facts = wm.get("key_facts", {})
+        derived = wm.get("derived_understanding", [])
+
+        st.caption(
+            f"Generated: {meta.get('generated_at', 'N/A')} · "
+            f"Status: **{state.get('status', 'N/A')}** · "
+            f"Period: {state.get('reporting_period', 'N/A')}"
+        )
+
+        # Identity row
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Company", state.get("company", "N/A"))
+        col2.metric("Ticker", state.get("ticker", "N/A"))
+        col3.metric("Filing Type", state.get("filing_type", "N/A"))
+
+        st.divider()
+        st.subheader("📊 Key Facts")
+
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Revenue", _fmt(facts.get("revenue")))
+        col1.metric("Net Income", _fmt(facts.get("net_income")))
+        col2.metric("Operating Cash Flow", _fmt(facts.get("operating_cash_flow")))
+        col2.metric("CapEx", _fmt(facts.get("capex")))
+        col3.metric("Free Cash Flow", _fmt(facts.get("fcf")))
+        col3.metric("FCF Margin", _fmt_pct(facts.get("fcf_margin")))
+
+        st.divider()
+        st.subheader("🔍 Derived Understanding")
+        st.caption("Rule-based classifications from computed facts — no LLM involvement")
+
+        for insight in derived:
+            if "low" in insight.lower() or "loss" in insight.lower() or "negative" in insight.lower():
+                st.warning(f"⚠️ {insight}")
+            elif "high" in insight.lower() or "capital-intensive" in insight.lower():
+                st.info(f"ℹ️ {insight}")
+            else:
+                st.success(f"✓ {insight}")
+
+        with st.expander("View raw world_model.json"):
+            st.json(wm)
+
+# ---------------------------------------------------------------------------
+# Tab 7 — Signals
+# ---------------------------------------------------------------------------
+
+with tab7:
+    sig = find_latest_signals()
+    if sig is None:
+        summary = find_latest_summary()
+        sig = summary.get("signals") if summary else None
+
+    if sig is None:
+        st.info("No signals yet — run `python main.py` first")
+    else:
+        signal_list = sig.get("signals", [])
+        nba = sig.get("next_best_action", "N/A")
+        signal_count = sig.get("signal_count", len(signal_list))
+
+        # KPI
+        col1, col2 = st.columns(2)
+        col1.metric("Active Signals", signal_count)
+        col2.metric("Prior Period Available", "Yes" if sig.get("prior_period_available") else "No")
+
+        st.divider()
+
+        if signal_list:
+            st.subheader(f"⚡ Active Signals ({signal_count})")
+            for signal in signal_list:
+                st.error(f"🔴 {signal}")
+        else:
+            st.success("✅ No signals detected — metrics within normal thresholds")
+
+        st.divider()
+
+        st.subheader("🎯 Next Best Action")
+        st.info(f"**{nba}**")
+
+        st.divider()
+        st.subheader("Signal Definitions")
+        with st.expander("Show thresholds"):
+            st.markdown("""
+| Signal | Threshold | Source |
+|---|---|---|
+| Low FCF Margin | FCF Margin < 5.0% | Computed FCF / Revenue |
+| High CapEx / OCF | CapEx > 80% of Operating Cash Flow | Computed ratios |
+| Negative FCF | FCF < $0 | Computed FCF |
+| Net Loss | Net Income < $0 | XBRL extracted |
+
+All signals fire **deterministically** from computed facts — no LLM involvement.
+            """)
+
+        with st.expander("View raw signals.json"):
+            st.json(sig)

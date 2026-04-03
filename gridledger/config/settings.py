@@ -1,49 +1,6 @@
 # gridledger/config/settings.py
 
 from pathlib import Path
-from datetime import date, timedelta
-
-# -------------------------------------------------
-# Project Paths
-# -------------------------------------------------
-
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-
-DATA_DIR = PROJECT_ROOT / "data"
-OUTPUT_DIR = PROJECT_ROOT / "outputs"
-
-DATA_DIR.mkdir(parents=True, exist_ok=True)
-OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-
-
-# -------------------------------------------------
-# CAISO API Settings
-# -------------------------------------------------
-
-CAISO_BASE_URL = "https://oasis.caiso.com/oasisapi/SingleZip"
-
-# Default trading hub nodes
-DEFAULT_NODES = [
-    "TH_NP15_GEN-APND",
-    "TH_SP15_GEN-APND",
-    "TH_ZP26_GEN-APND",
-]
-
-# Default date range (last 7 days to keep payload small)
-DEFAULT_END_DATE = date.today().isoformat()
-DEFAULT_START_DATE = (date.today() - timedelta(days=7)).isoformat()
-
-CAISO_TIMEZONE = "America/Los_Angeles"
-
-
-# -------------------------------------------------
-# Battery Modeling Defaults (AC3)
-# -------------------------------------------------
-
-# gridledger/config/settings.py
-
-from pathlib import Path
-from datetime import date, timedelta
 import os
 from dotenv import load_dotenv
 
@@ -58,75 +15,39 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 DATA_DIR = PROJECT_ROOT / "data"
 OUTPUT_DIR = PROJECT_ROOT / "outputs"
+FILING_DIR = DATA_DIR / "filings"
 
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+FILING_DIR.mkdir(parents=True, exist_ok=True)
 
 
 # -------------------------------------------------
-# CAISO API Settings
+# SEC EDGAR Settings
 # -------------------------------------------------
 
-CAISO_BASE_URL = "https://oasis.caiso.com/oasisapi/SingleZip"
+DOMINION_CIK = "0000715957"
+DOMINION_TICKER = "D"
+DOMINION_NAME = "Dominion Energy"
 
-# Default trading hub nodes
-DEFAULT_NODES = [
-    "TH_NP15_GEN-APND",
-    "TH_SP15_GEN-APND",
-    "TH_ZP26_GEN-APND",
-]
+EDGAR_BASE_URL = "https://data.sec.gov/api/xbrl/companyfacts"
+EDGAR_USER_AGENT = "GridLedger/1.0 (contact@gridledger.ai)"
 
-# Default date range (last 7 days to keep payload small)
-DEFAULT_END_DATE = date.today().isoformat()
-DEFAULT_START_DATE = (date.today() - timedelta(days=7)).isoformat()
-
-CAISO_TIMEZONE = "America/Los_Angeles"
+# Minimum days for a full-year 10-K period (guards against transition filings)
+ANNUAL_PERIOD_MIN_DAYS = 350
 
 
 # -------------------------------------------------
-# Battery Modeling Defaults (AC3)
+# FCF Signal Thresholds
 # -------------------------------------------------
 
-DEFAULT_BATTERY_MWH = 2
-DEFAULT_EFFICIENCY = 0.90
-DEFAULT_CYCLES_PER_DAY = 1.0
-
-SCENARIOS = {
-    "conservative": {
-        "battery_mwh": 2,
-        "efficiency": 0.88,
-        "cycles": 0.6,
-    },
-    "base": {
-        "battery_mwh": 2,
-        "efficiency": 0.90,
-        "cycles": 1.0,
-    },
-    "aggressive": {
-        "battery_mwh": 2,
-        "efficiency": 0.92,
-        "cycles": 1.5,
-    },
-}
+FCF_MARGIN_WARN_THRESHOLD = 0.05       # < 5% → capital pressure signal
+CAPEX_TO_OCF_WARN_THRESHOLD = 0.80    # > 80% → high CapEx signal
 
 
 # -------------------------------------------------
-# Risk Classification Thresholds (AC4)
-# Volatility measured as std deviation of hourly LMP
-# -------------------------------------------------
-
-LOW_VOL_THRESHOLD = 10
-HIGH_VOL_THRESHOLD = 20
-
-
-# -------------------------------------------------
-# Claude Settings (AC5)
+# Claude Settings
 # -------------------------------------------------
 
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 CLAUDE_MODEL = "claude-opus-4-6"
-
-
-
-
-

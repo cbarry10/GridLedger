@@ -1,72 +1,137 @@
+# gridledger/tasks/output.py
+#
+# Cortex v3 — Save structured run outputs to a dated directory.
+# Produces: summary.json, world_model.json, signals.json, report.txt
+
 import json
+import logging
+from datetime import datetime, timezone
 from pathlib import Path
-from datetime import datetime
-import pandas as pd
 
-from gridledger.config.settings import OUTPUT_DIR
+from gridledger.config.settings import (
+    DOMINION_NAME,
+    DOMINION_TICKER,
+    OUTPUT_DIR,
+)
+
+logger = logging.getLogger(__name__)
 
 
-def save_structured_outputs(metrics, revenue, memo, df):
+def save_structured_outputs(
+    fcf_output: dict,
+    world_model: dict,
+    signals_output: dict,
+    memo: str,
+    run_id: str | None = None,
+) -> str:
     """
-    Saves all AC6 outputs:
-    - JSON summary
-    - CSV metrics
-    - Text report
-    """
+    Save all Cortex outputs to a timestamped run directory.
 
-    # Create dated output directory
-    run_date = datetime.now().strftime("%Y-%m-%d")
+    Creates:
+        outputs/<YYYY-MM-DD>/summary.json
+        outputs/<YYYY-MM-DD>/world_model.json
+        outputs/<YYYY-MM-DD>/signals.json
+        outputs/<YYYY-MM-DD>/report.txt
+
+    Returns:
+        Path to the run directory (str)
+    """
+    run_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     run_dir = OUTPUT_DIR / run_date
     run_dir.mkdir(parents=True, exist_ok=True)
 
-    timestamp = datetime.now().isoformat()
+    timestamp = datetime.now(timezone.utc).isoformat()
 
-    # ------------------------
-    # JSON Output
-    # ------------------------
-    json_output = {
+    # -------------------------
+    # summary.json (full payload)
+    # -------------------------
+    summary = {
+        "run_id": run_id,
         "timestamp": timestamp,
-        "metrics": metrics,
-        "revenue": revenue,
+        "ticker": DOMINION_TICKER,
+        "company": DOMINION_NAME,
+        "reporting_period": fcf_output.get("reporting_period"),
+        "fcf": fcf_output,
+        "world_model": world_model,
+        "signals": signals_output,
         "memo": memo,
     }
+    _write_json(run_dir / "summary.json", summary)
 
-    json_path = run_dir / "summary.json"
-    with open(json_path, "w") as f:
-        json.dump(json_output, f, indent=4)
+    # -------------------------
+    # world_model.json (standalone, for dashboard Tab 6)
+    # -------------------------
+    _write_json(run_dir / "world_model.json", world_model)
 
-    # ------------------------
-    # CSV Output
-    # ------------------------
-    metrics_df = pd.DataFrame([metrics])
-    csv_path = run_dir / "metrics.csv"
-    metrics_df.to_csv(csv_path, index=False)
+    # -------------------------
+    # signals.json (standalone, for dashboard Tab 7)
+    # -------------------------
+    _write_json(run_dir / "signals.json", signals_output)
 
-    # ------------------------
-    # Text Report
-    # ------------------------
-    report_path = run_dir / "report.txt"
+    # -------------------------
+    # report.txt (human-readable)
+    # -------------------------
+    report = _build_report(timestamp, fcf_output, signals_output, memo)
+    (run_dir / "report.txt").write_text(report, encoding="utf-8")
 
-    report_text = f"""
-GRIDLEDGER REVENUE SNAPSHOT
-Timestamp: {timestamp}
+    logger.info("Outputs saved to: %s", run_dir)
+    print(f"\n[Cortex] Outputs saved to: {run_dir}")
 
-Average Price: {metrics['average_price']}
-Min Price: {metrics['min_price']}
-Max Price: {metrics['max_price']}
-Price Range: {metrics['price_range']}
-Volatility: {metrics['volatility']}
-Risk Level: {metrics.get('risk_level', 'N/A')}
+    return str(run_dir)
 
-Revenue Estimate:
-Simple Revenue: {revenue['simple_revenue_estimate']}
-Arbitrage Proxy: {revenue['arbitrage_proxy_revenue']}
 
-AI Memo:
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+def _write_json(path: Path, data: dict) -> None:
+    path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+
+
+def _fmt(v: int | None) -> str:
+    if v is None:
+        return "N/A"
+    if abs(v) >= 1_000_000_000:
+        return f"${v / 1_000_000_000:.1f}B"
+    return f"${v / 1_000_000:.1f}M"
+
+
+def _build_report(
+    timestamp: str,
+    fcf_output: dict,
+    signals_output: dict,
+    memo: str,
+) -> str:
+    signals = signals_output.get("signals", [])
+    signal_lines = "\n".join(f"  • {s}" for s in signals) if signals else "  (none)"
+    nba = signals_output.get("next_best_action", "N/A")
+    period = fcf_output.get("reporting_period", "N/A")
+
+    return f"""
+CORTEX — AI FINANCIAL INTELLIGENCE SYSTEM
+Dominion Energy (D) | {period}
+Generated: {timestamp}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+COMPUTED FINANCIALS (Junior Banker — Deterministic)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  Revenue:              {_fmt(fcf_output.get('revenue'))}
+  Net Income:           {_fmt(fcf_output.get('net_income'))}
+  Operating Cash Flow:  {_fmt(fcf_output.get('operating_cash_flow'))}
+  Capital Expenditures: {_fmt(fcf_output.get('capex'))}
+  Free Cash Flow:       {_fmt(fcf_output.get('fcf'))}
+  FCF Margin:           {f"{fcf_output.get('fcf_margin', 0):.2%}" if fcf_output.get('fcf_margin') is not None else "N/A"}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SYSTEM SIGNALS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+{signal_lines}
+
+Next Best Action: {nba}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+INVESTMENT MEMO (Senior Banker — LLM)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 {memo}
 """
-
-    with open(report_path, "w") as f:
-        f.write(report_text)
-
-    print(f"\n[AC6] Outputs saved to: {run_dir}")
