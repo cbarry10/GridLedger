@@ -17,7 +17,8 @@ def run_pipeline():
             [sys.executable, str(main_script)],
             capture_output=True,
             text=True,
-            cwd=project_root
+            cwd=project_root,
+            timeout=120,
         )
 
         if result.returncode == 0:
