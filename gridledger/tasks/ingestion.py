@@ -129,13 +129,21 @@ def fetch_10k_filing(
 
 def extract_item1_context(raw_doc_path: str, chars: int = 5000) -> str:
     """
-    Strip HTML, find 'Item 1' anchor, return `chars` characters from that point.
+    Strip HTML/SGML, find 'Item 1' anchor, return `chars` characters from that point.
     Falls back to 'Part I' anchor, then raw start of document.
+
+    Handles both plain HTML files and sec-edgar-downloader full-submission.txt bundles.
     """
     from bs4 import BeautifulSoup
 
-    html = Path(raw_doc_path).read_text(encoding="utf-8", errors="ignore")
-    text = BeautifulSoup(html, "html.parser").get_text()
+    raw = Path(raw_doc_path).read_text(encoding="utf-8", errors="ignore")
+
+    # full-submission.txt is an SGML bundle — extract the largest <DOCUMENT> block
+    # that contains actual HTML (identified by <html or <HTML tag inside)
+    if raw_doc_path.endswith(".txt") and "<SEC-DOCUMENT>" in raw:
+        raw = _extract_html_from_sgml_bundle(raw)
+
+    text = BeautifulSoup(raw, "html.parser").get_text()
 
     lower = text.lower()
     anchor = lower.find("item 1")
@@ -145,6 +153,20 @@ def extract_item1_context(raw_doc_path: str, chars: int = 5000) -> str:
         anchor = 0
 
     return text[anchor: anchor + chars]
+
+
+def _extract_html_from_sgml_bundle(bundle: str) -> str:
+    """
+    EDGAR full-submission.txt bundles contain multiple <DOCUMENT> sections.
+    Find the largest one that contains HTML — that's the 10-K body.
+    """
+    import re
+    docs = re.findall(r"<DOCUMENT>(.*?)</DOCUMENT>", bundle, re.DOTALL)
+    html_docs = [d for d in docs if "<html" in d.lower()]
+    if not html_docs:
+        return bundle  # fallback: parse whole thing
+    # Return the largest HTML document block
+    return max(html_docs, key=len)
 
 
 # ---------------------------------------------------------------------------
@@ -198,12 +220,14 @@ def _extract_latest_annual(facts: dict, tags: list[str]) -> dict:
 
 def _find_downloaded_filing(ticker: str) -> Path | None:
     """
-    sec-edgar-downloader writes to sec-edgar-filings/<TICKER>/10-K/<accession>/*.htm
-    Walk FILING_DIR to find the most-recently modified file.
+    sec-edgar-downloader writes to sec-edgar-filings/<TICKER>/10-K/<accession>/
+    Newer versions save full-submission.txt (SGML bundle); older saved .htm/.html.
+    Walk FILING_DIR newest-first across all known extensions.
     """
     for pattern in [
         f"sec-edgar-filings/{ticker}/10-K/**/*.htm",
         f"sec-edgar-filings/{ticker}/10-K/**/*.html",
+        f"sec-edgar-filings/{ticker}/10-K/**/full-submission.txt",
     ]:
         matches = sorted(
             FILING_DIR.glob(pattern),

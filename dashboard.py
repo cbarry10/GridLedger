@@ -24,11 +24,17 @@ DATA_DIR = PROJECT_ROOT / "data"
 
 @st.cache_data(ttl=300)
 def find_latest_summary() -> dict | None:
-    candidates = sorted(OUTPUTS_DIR.glob("*/summary.json"))
-    if not candidates:
-        return None
-    with open(candidates[-1]) as f:
-        return json.load(f)
+    # Walk newest-first; skip old CAISO-format summaries (they have 'metrics' key, not 'fcf')
+    candidates = sorted(OUTPUTS_DIR.glob("*/summary.json"), reverse=True)
+    for path in candidates:
+        try:
+            with open(path) as f:
+                data = json.load(f)
+            if "fcf" in data:   # Cortex v3 format
+                return data
+        except Exception:
+            continue
+    return None
 
 
 @st.cache_data(ttl=300)
@@ -149,7 +155,9 @@ with tab1:
             st.info(f"⚡ **Next Best Action:** {signals['next_best_action']}")
 
         st.subheader("Investment Memo")
-        st.markdown(summary.get("memo", "_No memo generated_"))
+        memo_text = summary.get("memo", "_No memo generated_")
+        # Escape bare $ so Streamlit doesn't render them as LaTeX math
+        st.markdown(memo_text.replace("$", r"\$"))
 
         if fcf.get("errors"):
             with st.expander("⚠️ Computation warnings"):

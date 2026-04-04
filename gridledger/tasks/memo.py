@@ -40,7 +40,8 @@ def generate_investment_memo(
         Memo text (str)
     """
     if not ANTHROPIC_API_KEY:
-        raise ValueError("ANTHROPIC_API_KEY not set in environment.")
+        logger.warning("ANTHROPIC_API_KEY not set — returning placeholder memo")
+        return _placeholder_memo(fcf_output, signals_output)
 
     client = Anthropic(api_key=ANTHROPIC_API_KEY)
     prompt_version = ACTIVE_PROMPT_VERSION
@@ -52,11 +53,15 @@ def generate_investment_memo(
 
     logger.info("Calling Claude for memo generation (prompt_version=%s)", prompt_version)
 
-    response = client.messages.create(
-        model=CLAUDE_MODEL,
-        max_tokens=700,
-        messages=[{"role": "user", "content": prompt}],
-    )
+    try:
+        response = client.messages.create(
+            model=CLAUDE_MODEL,
+            max_tokens=700,
+            messages=[{"role": "user", "content": prompt}],
+        )
+    except Exception as exc:
+        logger.warning("Claude API call failed (%s) — returning placeholder memo", exc)
+        return _placeholder_memo(fcf_output, signals_output)
 
     memo_text = response.content[0].text.strip()
     token_usage = {
@@ -131,3 +136,33 @@ def _build_prompt_kwargs(
         "signals_text":     signals_text,
         "item1_context":    item1_context[:3000] if item1_context else "Not available.",
     }
+
+
+def _placeholder_memo(fcf_output: dict, signals_output: dict) -> str:
+    """
+    Returned when Claude API is unavailable.  Shows computed facts only —
+    no fabricated analysis.  Clearly marked as a placeholder.
+    """
+    def _fmt(v):
+        if v is None:
+            return "N/A"
+        if abs(v) >= 1_000_000_000:
+            return f"${v / 1_000_000_000:.1f}B"
+        return f"${v / 1_000_000:.1f}M"
+
+    signals = signals_output.get("signals", [])
+    signal_lines = "\n".join(f"- {s}" for s in signals) if signals else "- None detected"
+
+    return (
+        "## Memo Unavailable — API Key Required\n\n"
+        "Set `ANTHROPIC_API_KEY` in your `.env` file to generate the investment memo.\n\n"
+        "---\n\n"
+        "**Computed facts are available below (no LLM required):**\n\n"
+        f"- Revenue: {_fmt(fcf_output.get('revenue'))}\n"
+        f"- Operating Cash Flow: {_fmt(fcf_output.get('operating_cash_flow'))}\n"
+        f"- CapEx: {_fmt(fcf_output.get('capex'))}\n"
+        f"- FCF: {_fmt(fcf_output.get('fcf'))}\n"
+        f"- FCF Margin: {'{:.2%}'.format(fcf_output['fcf_margin']) if fcf_output.get('fcf_margin') is not None else 'N/A'}\n\n"
+        f"**Active signals:**\n{signal_lines}\n\n"
+        f"**Next best action:** {signals_output.get('next_best_action', 'N/A')}"
+    )
