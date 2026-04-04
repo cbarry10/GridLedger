@@ -4,8 +4,9 @@ from pathlib import Path
 import os
 from dotenv import load_dotenv
 
-# Load environment variables (.env)
-load_dotenv()
+# Load .env from the project root explicitly (prevents picking up a parent .env)
+_ENV_PATH = Path(__file__).resolve().parents[2] / ".env"
+load_dotenv(dotenv_path=_ENV_PATH, override=True)
 
 # -------------------------------------------------
 # Project Paths
